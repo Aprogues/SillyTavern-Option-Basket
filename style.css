@@ -1,0 +1,298 @@
+/* 选项篮 —— 默认跟随酒馆主题配色（文件末尾）；下面是「固定深色」的取值 */
+.ob-root {
+    --ob-bg: #26272C;
+    --ob-row: #2f3037;
+    --ob-text: #E4E6EB;
+    --ob-muted: #9a9ca4;
+    --ob-line: #3a3b42;
+    --ob-hl: #7FB8E6;
+    --ob-on-hl: #10263a;
+    --ob-star: #f0c862;
+    box-sizing: border-box;
+    background: var(--ob-bg);
+    color: var(--ob-text);
+    border: 1px solid var(--ob-line);
+    font-size: 14px;
+    line-height: 1.5;
+}
+#option_basket_tray {
+    width: 100%;
+    margin: 0 0 6px;
+    border-radius: 14px;
+    overflow: hidden;
+}
+#option_basket_tray[hidden] { display: none; }
+.ob-root *, .ob-root *::before, .ob-root *::after { box-sizing: border-box; }
+
+.ob-root button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.ob-root .ob-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 40px;
+    padding: 6px 12px;
+    text-align: left;
+}
+.ob-root .ob-head > i:first-child { color: var(--ob-hl); }
+.ob-root .ob-title { font-weight: 600; }
+.ob-root .ob-hint { color: var(--ob-muted); font-size: 12px; }
+.ob-root .ob-head > i:last-child { margin-left: auto; color: var(--ob-muted); }
+
+.ob-root .ob-body {
+    padding: 0 10px 10px;
+    max-height: min(55vh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.ob-root .ob-label {
+    color: var(--ob-muted);
+    font-size: 12px;
+    margin: 2px 2px 6px;
+}
+.ob-root .ob-current { margin-bottom: 10px; }
+
+.ob-root .ob-opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--ob-line);
+    text-align: left;
+}
+.ob-root .ob-opt:last-child { border-bottom: 0; }
+.ob-root .ob-opt i { color: var(--ob-muted); margin-top: 3px; }
+.ob-root .ob-opt.on i { color: var(--ob-star); }
+
+.ob-root .ob-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.ob-root .ob-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--ob-row);
+    border-radius: 10px;
+    padding: 6px 6px 6px 4px;
+    margin-bottom: 6px;
+}
+.ob-root .ob-item { position: relative; }
+.ob-root .ob-item.ob-dragging { outline: 2px solid var(--ob-hl); z-index: 2; box-shadow: 0 6px 16px rgba(0, 0, 0, .35); }
+.ob-root .ob-handle {
+    flex: none;
+    width: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ob-muted);
+    cursor: grab;
+    touch-action: none;
+}
+.ob-root .ob-item .ob-text { padding-top: 5px; cursor: text; }
+.ob-root .ob-src {
+    flex: none;
+    color: var(--ob-muted);
+    font-size: 11px;
+    padding-top: 7px;
+    white-space: nowrap;
+}
+.ob-root .ob-del {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    color: var(--ob-muted);
+}
+.ob-root .ob-del:hover { color: var(--ob-text); background: var(--ob-line); }
+
+.ob-root .ob-empty {
+    color: var(--ob-muted);
+    font-size: 13px;
+    padding: 8px 4px;
+}
+
+.ob-root .ob-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    background: var(--ob-row);
+    color: var(--ob-text);
+    border: 1px dashed #4a4b53;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font: inherit;
+    resize: vertical;
+}
+.ob-root .ob-input.ob-edit { border-style: solid; border-color: var(--ob-hl); }
+.ob-root .ob-add { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 10px; }
+
+.ob-root .ob-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ob-root .ob-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 6px 14px;
+    border: 1px solid #4a4b53;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.ob-root .ob-btn:hover { background: var(--ob-row); }
+.ob-root .ob-primary { background: var(--ob-hl); color: var(--ob-on-hl); border-color: var(--ob-hl); font-weight: 600; }
+.ob-root .ob-primary:hover { background: #95c6ec; }
+.ob-root .ob-quiet { margin-left: auto; color: var(--ob-muted); }
+.ob-root .ob-btn:disabled { opacity: .45; cursor: default; }
+.ob-root button:focus-visible, .ob-root .ob-input:focus-visible { outline: 2px solid var(--ob-hl); outline-offset: 1px; }
+
+@media (max-width: 600px) {
+    .ob-root .ob-actions .ob-btn:not(.ob-quiet) { flex: 1 1 0; }
+}
+
+#option_basket_settings label { display: block; margin-top: 6px; }
+#option_basket_settings small { display: block; opacity: .75; margin: 2px 0 6px; }
+
+/* ---------- B 右侧抽屉 / C 底部弹出面板 ---------- */
+#option_basket_backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    background: rgba(0, 0, 0, .45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease;
+}
+#option_basket_backdrop.ob-open { opacity: 1; pointer-events: auto; }
+/* 宽屏上抽屉和聊天并排，不加遮罩，可以一边看正文一边整理 */
+@media (min-width: 900px) {
+    #option_basket_backdrop.ob-drawer { display: none; }
+}
+
+#option_basket_overlay {
+    position: fixed;
+    z-index: 9001;
+    display: flex;
+    flex-direction: column;
+    background: var(--ob-bg);
+    border: 1px solid var(--ob-line);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .45);
+    visibility: hidden;
+    transition: transform .25s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .25s;
+}
+#option_basket_overlay.ob-open { visibility: visible; transition: transform .25s cubic-bezier(.22, 1, .36, 1), visibility 0s; }
+#option_basket_overlay .ob-body { max-height: none; flex: 1 1 auto; min-height: 0; padding-top: 4px; }
+
+#option_basket_overlay.ob-drawer {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(380px, 92vw);
+    border-radius: 16px 0 0 16px;
+    border-right: 0;
+    transform: translateX(105%);
+}
+#option_basket_overlay.ob-drawer.ob-open { transform: none; }
+
+#option_basket_overlay.ob-sheet {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0 auto;
+    width: min(760px, 100%);
+    max-height: 75vh;
+    max-height: 75dvh;
+    border-radius: 18px 18px 0 0;
+    border-bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transform: translateY(105%);
+}
+#option_basket_overlay.ob-sheet.ob-open { transform: none; }
+
+.ob-root .ob-grip {
+    flex: none;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none;
+}
+.ob-root .ob-grip::before {
+    content: '';
+    width: 44px;
+    height: 5px;
+    border-radius: 3px;
+    background: #4a4b53;
+}
+.ob-root .ob-overlay-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 8px 8px 14px;
+}
+.ob-root .ob-overlay-head > i:first-child { color: var(--ob-hl); }
+.ob-root .ob-overlay-head .ob-close {
+    margin-left: auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    color: var(--ob-muted);
+}
+.ob-root .ob-overlay-head .ob-close:hover { color: var(--ob-text); background: var(--ob-line); }
+#option_basket_overlay.ob-sheet .ob-overlay-head { padding-top: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+    #option_basket_overlay, #option_basket_backdrop { transition: none !important; }
+}
+
+/* ---------- 配色：跟随酒馆主题（默认）/ 固定深色 ---------- */
+.ob-root[data-palette="theme"] {
+    --ob-bg: var(--SmartThemeBlurTintColor, #26272C);
+    --ob-row: color-mix(in srgb, var(--SmartThemeBodyColor, #E4E6EB) 7%, transparent);
+    --ob-text: var(--SmartThemeBodyColor, #E4E6EB);
+    --ob-muted: color-mix(in srgb, var(--SmartThemeBodyColor, #E4E6EB) 60%, transparent);
+    --ob-line: var(--SmartThemeBorderColor, #3a3b42);
+    --ob-hl: var(--SmartThemeQuoteColor, #7FB8E6);
+    -webkit-backdrop-filter: blur(calc(var(--SmartThemeBlurStrength, 10px) * 1));
+    backdrop-filter: blur(calc(var(--SmartThemeBlurStrength, 10px) * 1));
+}
+/* 主题色不一定适合当按钮底色，跟随主题时主按钮改成描边样式，任何主题下都看得清 */
+.ob-root[data-palette="theme"] .ob-primary {
+    background: color-mix(in srgb, var(--ob-hl) 18%, transparent);
+    color: var(--ob-hl);
+    border-color: var(--ob-hl);
+}
+.ob-root[data-palette="theme"] .ob-primary:hover { background: color-mix(in srgb, var(--ob-hl) 28%, transparent); }
+/* 主按钮、正在编辑的输入框保留高亮描边，其余跟随主题边框色 */
+.ob-root[data-palette="theme"] .ob-btn:not(.ob-primary),
+.ob-root[data-palette="theme"] .ob-input:not(.ob-edit) { border-color: var(--ob-line); }
+/* 抽屉、底部面板盖在聊天上：取主题色但去掉透明度，免得字和底下的聊天叠在一起看不清。
+   老浏览器不支持这种写法时用固定深色，不会变成全透明。 */
+#option_basket_overlay[data-palette="theme"] { background: #1d1e22; }
+@supports (color: rgb(from red r g b)) {
+    #option_basket_overlay[data-palette="theme"] {
+        background: rgb(from var(--SmartThemeBlurTintColor, #26272C) r g b / 1);
+    }
+}
+
+/* ---------- 设置面板 ---------- */
+#option_basket_settings h4 { margin: 12px 0 4px; }
+#option_basket_settings h4:first-child { margin-top: 4px; }
+#option_basket_settings .ob-settings-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 6px 0; }
+#option_basket_settings .ob-test-out { flex: 1; font-size: .85em; opacity: .8; overflow-wrap: anywhere; }
+#option_basket_settings [hidden] { display: none !important; }
+#option_basket_settings .ob-model-row { justify-content: stretch; }
+#option_basket_settings .ob-model-row .text_pole { flex: 1; min-width: 0; margin: 0; }
+#option_basket_settings .ob-model-row .menu_button { flex: none; white-space: nowrap; }
