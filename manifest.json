@@ -1,7 +1,7 @@
 {
     "display_name": "选项篮",
     "author": "Aprogues",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "重 roll 时收集各版回复里的选项，排好顺序后直接拼接或让 AI 串成一段，填进输入框。",
     "homePage": "https://github.com/Aprogues/SillyTavern-Option-Basket",
     "loading_order": 230,

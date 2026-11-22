@@ -27,7 +27,10 @@ const DEFAULTS = Object.freeze({
     panelSelector: '.option-button', // 卡片选项面板里每个选项按钮的选择器，用来加星
     // 串联
     apiMode: 'follow',           // follow：跟随当前连接；profile：酒馆连接配置；custom：自定义接口
-    model: '',                   // follow / profile 模式下可选的换模型；留空用原模型
+    presetMode: 'current',       // follow 模式带不带预设：none 不带；current 当前预设；other 另选一个已保存的预设
+    otherPreset: '',             // presetMode 为 other 时用的预设名
+    historyCount: 6,             // 带预设时最多带几条聊天记录；0 = 全部
+    model: '',                 // follow / profile 模式下可选的换模型；留空用原模型
     profileId: '',
     customUrl: '',
     customKey: '',
@@ -60,6 +63,12 @@ function settings() {
     const all = ctx().extensionSettings;
     if (!all[MODULE] || typeof all[MODULE] !== 'object') all[MODULE] = {};
     const s = all[MODULE];
+    if (s.usePreset !== undefined) { // 1.0.3 测试版的开关
+        if (s.presetMode === undefined) s.presetMode = s.usePreset ? 'current' : 'none';
+        delete s.usePreset;
+    }
+    // 从 1.0.2 升级的老用户保持原来的「不带预设」，免得悄悄换成主模型、花费变多；新装的默认带当前预设
+    if (s.presetMode === undefined && Object.keys(s).length) s.presetMode = 'none';
     for (const [k, v] of Object.entries(DEFAULTS)) if (s[k] === undefined) s[k] = v;
     return s;
 }
@@ -214,7 +223,9 @@ function markUsed(list, text) {
 
 function cleanOutput(text) {
     return String(text ?? '')
-        .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
+        .replace(/<(think|thinking|[a-z_]*planning[a-z_~]*)>[\s\S]*?<\/\1>/gi, '')
+        .replace(/<(think|thinking)>[\s\S]*$/i, '')     // 被截断、没有闭合的思考块
+        .replace(/^[\s\S]*<\/think(?:ing)?>/i, '')      // 只有结尾标签：前面都是思考
         .replace(/^```[a-z]*\s*|\s*```$/gi, '')
         .trim()
         .replace(/^["“「]([\s\S]*)["”」]$/, '$1')
@@ -266,9 +277,149 @@ function effortFor(source, model = '') {
 // 酒馆只对这几个渠道使用「反向代理」设置
 const PROXY_SOURCES = new Set(['openai', 'claude', 'mistralai', 'makersuite', 'vertexai', 'deepseek', 'xai', 'moonshot', 'zai']);
 
+// ---------- 带预设串联（思路参考 MVU 的「使用当前预设 / 使用其他预设」） ----------
+
+const TH = () => globalThis.TavernHelper;
+const hasTavernHelper = () => typeof TH()?.generate === 'function';
+
+// 已保存的聊天补全预设名（不含当前面板上未保存的临时修改）
+function savedPresetNames() {
+    try { return (TH()?.getPresetNames?.() ?? []).filter(n => n && n !== 'in_use'); } catch { return []; }
+}
+
+const abortError = () => new DOMException('已取消', 'AbortError');
+
+// 点取消后立刻放手：请求可能还在后台跑完（结果会被丢掉），但界面不用等它。
+function untilAbort(promise, signal, onAbort) {
+    if (signal.aborted) { onAbort?.(); return Promise.reject(abortError()); }
+    let off;
+    const aborted = new Promise((_, reject) => {
+        off = () => signal.removeEventListener('abort', handler);
+        const handler = () => { try { onAbort?.(); } catch { /* 已经结束 */ } reject(abortError()); };
+        signal.addEventListener('abort', handler, { once: true });
+    });
+    return Promise.race([promise, aborted]).finally(off);
+}
+
+function presetTask(list) {
+    const s = settings();
+    return [
+        String(s.mergePrompt ?? '').trim() || MERGE_SYSTEM,
+        '',
+        '【玩家选中的选项（按顺序）】',
+        ...list.map((i, n) => `${n + 1}. ${i.text}`),
+    ].join('\n');
+}
+
+// 带几条聊天记录：空着、乱填按默认；只有明确填 0 才是全部
+function historyCount() {
+    const raw = settings().historyCount;
+    if (raw === 0 || String(raw).trim() === '0') return 0;
+    const n = Math.floor(Number(raw));
+    return Number.isFinite(n) && n > 0 ? n : DEFAULTS.historyCount;
+}
+
+const PLACEHOLDER_IDS = ['worldInfoBefore', 'personaDescription', 'charDescription', 'charPersonality',
+    'scenario', 'worldInfoAfter', 'dialogueExamples', 'chatHistory'];
+const snake = id => id.replace(/[A-Z]/g, ch => `_${ch.toLowerCase()}`);
+
+// 把当前预设按条目顺序拆成 generateRaw 的提示词顺序（和酒馆助手处理 preset_name 的方式一样）。
+// 不直接用 generate()：它把注入登记成全局的，请求出错时撤不掉，会混进下一次正常生成。
+function inUsePromptOrder() {
+    const T = TH();
+    const preset = T.getPreset('in_use');
+    const sub = text => (typeof T.substitudeMacros === 'function' ? T.substitudeMacros(text) : text);
+    const ordered = [];
+    const inChat = [];
+    for (const p of preset?.prompts ?? []) {
+        if (!p || p.enabled === false) continue;
+        if (p.position?.type === 'in_chat') {
+            const content = typeof p.content === 'string' ? sub(p.content) : '';
+            if (content.trim()) inChat.push({ depth: p.position.depth ?? 0, order: p.position.order ?? 100, role: p.role, content });
+            continue;
+        }
+        if (PLACEHOLDER_IDS.includes(p.id)) { ordered.push(snake(p.id)); continue; }
+        const content = typeof p.content === 'string' ? sub(p.content) : '';
+        if (content.trim()) ordered.push({ role: p.role, content });
+    }
+    inChat.sort((a, b) => a.depth - b.depth || a.order - b.order);
+    return {
+        ordered_prompts: ordered,
+        injects: inChat.map(p => ({ position: 'in_chat', depth: p.depth, should_scan: false, role: p.role, content: p.content })),
+    };
+}
+
+// 酒馆助手的 generate / generateRaw：预设的写作要求常会让模型接着写剧情，所以
+// 1) 只带最近几条聊天，2) 用 <past_observe> 把聊天记录标成「已经发生的事」，
+// 3) 任务作为这一轮的用户输入，最后再加一条系统提醒。（思路参考 MVU）
+async function thPresetMerge(list, signal, presetName) {
+    const s = settings();
+    const c = ctx();
+    const n = historyCount();
+    const summary = presetName && s.summary !== 'none' ? storySummary(currentReply()) : '';
+    const userInput = [
+        '【这是后台任务，不是剧情的下一轮：不要续写剧情，只按下面的要求输出】',
+        summary ? `【当前剧情】\n${summary}\n` : '',
+        presetTask(list),
+    ].filter(Boolean).join('\n');
+    const openDepth = Math.min((n || (c.chat?.length ?? 0)) + 1, 10000); // 放在带上的聊天记录最前面
+    const ours = [
+        { position: 'in_chat', depth: openDepth, should_scan: false, role: 'system', content: '<past_observe>' },
+        { position: 'in_chat', depth: 1, should_scan: false, role: 'system', content: '</past_observe>' },
+        { position: 'in_chat', depth: 0, should_scan: false, role: 'system', content: '提醒：<past_observe> 里是已经发生的剧情，只作参考。这一轮只做选项整合，按任务要求输出整合后的那段文字，不要续写剧情。' },
+    ];
+    const id = `option_basket_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    const base = { generation_id: id, user_input: userInput, should_silence: true, should_stream: false, max_chat_history: n || 'all' };
+    let request;
+    if (presetName) {
+        // 用别的预设时酒馆助手会自己转成 generateRaw，注入只在这次请求里有效
+        request = TH().generate({ ...base, preset_name: presetName, injects: ours });
+    } else {
+        const { ordered_prompts, injects } = inUsePromptOrder();
+        request = TH().generateRaw({ ...base, ordered_prompts, injects: [...ours, ...injects] });
+    }
+    const res = await untilAbort(request, signal, () => TH().stopGenerationById?.(id));
+    return typeof res === 'string' ? res : String(res?.content ?? res?.text ?? '');
+}
+
+// 没装酒馆助手、或用的是文字补全 API 时的退路：酒馆自己的后台生成（和总结扩展同一条路），
+// 预设、角色卡、世界书、全部聊天记录都会带上，聊天记录条数和防续写标记都做不到。
+// 取消时不调用酒馆的「停止生成」，免得把正在输出的正常回复一起停掉；这次请求会在后台跑完再丢掉。
+async function quietPresetMerge(list, signal) {
+    const c = ctx();
+    const quietPrompt = `【本条是给你的后台任务，不是剧情的下一轮，不要续写剧情】\n${presetTask(list)}`;
+    return untilAbort(c.generateQuietPrompt({ quietPrompt, removeReasoning: true }), signal);
+}
+
+// 当前环境下「带预设」实际走哪条路
+function presetRoute() {
+    const chatCompletion = ctx().mainApi === 'openai';
+    return { th: hasTavernHelper() && chatCompletion, chatCompletion, hasTH: hasTavernHelper() };
+}
+
+async function presetMerge(list, signal) {
+    const s = settings();
+    const r = presetRoute();
+    if (s.presetMode === 'other') {
+        const name = String(s.otherPreset ?? '').trim();
+        if (!r.hasTH) throw new Error('「另选预设」需要安装酒馆助手（JS-Slash-Runner）');
+        if (!r.chatCompletion) throw new Error('「另选预设」只支持聊天补全类 API');
+        if (!name) throw new Error('还没选用哪个预设（扩展设置 → 选项篮）');
+        if (!savedPresetNames().includes(name)) throw new Error(`找不到已保存的预设「${name}」，请重新选（扩展设置 → 选项篮）`);
+        return thPresetMerge(list, signal, name);
+    }
+    if (r.th) return thPresetMerge(list, signal, null);
+    return quietPresetMerge(list, signal);
+}
+
 async function aiMerge(list, signal) {
     const c = ctx();
     const s = settings();
+    if (s.apiMode === 'follow' && ['current', 'other'].includes(s.presetMode)) {
+        const out = cleanOutput(await presetMerge(list, signal));
+        if (!out) throw new Error('模型没有返回内容（可能被预设的格式要求带偏，或被拒绝了）');
+        return out;
+    }
     const summary = storySummary(currentReply());
     const user = [
         summary ? `【当前剧情】\n${summary}\n` : '',
@@ -864,11 +1015,30 @@ function mountSettings() {
       <option value="profile">酒馆的连接配置</option>
       <option value="custom">自定义接口（OpenAI 兼容）</option>
     </select>
-    <div data-api="follow profile">
+    <div data-api="follow">
+      <label for="ob_preset">带不带预设</label>
+      <select id="ob_preset" class="text_pole" data-k="presetMode">
+        <option value="none">不带：只发串联提示词和选项</option>
+        <option value="current">当前预设</option>
+        <option value="other">另选一个已保存的预设</option>
+      </select>
+      <small data-preset="none">省 token、快，可以换个模型；有的模型没有预设会拒绝或返回空，串不出来就改成带预设。</small>
+      <small data-preset="current">带上当前预设、角色卡、世界书和最近几条聊天，预设里的破限会生效。预设通常要求写剧情，模型偶尔会接着写下去而不是整合选项；遇到这种情况试试「另选一个预设」。</small>
+      <div data-preset="other">
+        <select id="ob_other_preset" class="text_pole" data-k="otherPreset"></select>
+        <small>按这个预设里打开的条目顺序发提示词，不会切换你正在用的预设。读的是保存过的内容，面板上没保存的改动不算；预设里的正则和脚本不生效。可以专门存一个只有破限、没有写作要求的小预设给它用。</small>
+      </div>
+      <small id="ob_th_missing" hidden></small>
+      <div data-preset="current other">
+        <label for="ob_history">最多带几条聊天记录（0 = 全部）</label>
+        <input id="ob_history" class="text_pole" type="number" min="0" step="1" data-k="historyCount">
+        <small>带得越多越费 token；回复长度和温度按预设走。</small>
+      </div>
+    </div>
+    <div data-api="follow profile" data-preset="none">
       <label for="ob_model">换个模型（可留空 = 用原来的模型）</label>
       <input id="ob_model" class="text_pole" type="text" data-k="model" placeholder="比如一个便宜的快模型">
     </div>
-    <div data-api="follow"><small>用你聊天正在用的渠道和密钥，只是可以换个模型。</small></div>
     <div data-api="profile">
       <label for="ob_profile">连接配置</label>
       <select id="ob_profile" class="text_pole" data-k="profileId"></select>
@@ -888,11 +1058,13 @@ function mountSettings() {
       <small id="ob_fetch_out"></small>
       <small>请求经酒馆后台转发，不会被浏览器跨域拦下。注意：这里的密钥会以明文存进酒馆的设置文件；更稳妥的做法是在酒馆「连接配置」里存好，再选上面的「酒馆的连接配置」。</small>
     </div>
-    <label for="ob_summary">给模型的剧情上下文</label>
-    <select id="ob_summary" class="text_pole" data-k="summary">
-      <option value="auto">自动：卡片自带的「概括」，没有就取回复结尾约 500 字</option>
-      <option value="none">不附带，只发选项</option>
-    </select>
+    <div data-preset="none other">
+      <label for="ob_summary">给模型的剧情上下文</label>
+      <select id="ob_summary" class="text_pole" data-k="summary">
+        <option value="auto">自动：卡片自带的「概括」，没有就取回复结尾约 500 字</option>
+        <option value="none">不附带，只发选项</option>
+      </select>
+    </div>
     <label for="ob_prompt">串联提示词（留空 = 内置）</label>
     <textarea id="ob_prompt" class="text_pole" rows="6" data-k="mergePrompt"></textarea>
     <div class="ob-settings-row"><button type="button" class="menu_button" id="ob_prompt_reset">恢复内置提示词</button></div>
@@ -924,8 +1096,34 @@ function mountSettings() {
 
     const showApi = () => {
         const mode = settings().apiMode;
-        wrap.querySelectorAll('[data-api]').forEach(d => { d.hidden = !d.dataset.api.split(' ').includes(mode); });
+        // 连接配置和自定义接口都不带预设
+        const preset = mode === 'follow' ? settings().presetMode : 'none';
+        wrap.querySelectorAll('[data-api], [data-preset]').forEach(d => {
+            const apiOk = !d.dataset.api || d.dataset.api.split(' ').includes(mode);
+            const presetOk = !d.dataset.preset || d.dataset.preset.split(' ').includes(preset);
+            d.hidden = !(apiOk && presetOk);
+        });
+        // 带预设但走不了酒馆助手那条路时说明原因（装没装、是不是聊天补全 API）
+        const note = wrap.querySelector('#ob_th_missing');
+        const r = presetRoute();
+        const why = !r.hasTH ? '没检测到酒馆助手' : !r.chatCompletion ? '当前是文字补全类 API' : '';
+        note.textContent = !why ? '' : preset === 'other'
+            ? `${why}，「另选预设」用不了。`
+            : `${why}：「当前预设」会改走酒馆自己的后台生成，带上全部聊天记录（上面的条数不起作用），也没有防续写标记。`;
+        note.hidden = !(mode === 'follow' && preset !== 'none' && why);
     };
+    const presetSel = wrap.querySelector('#ob_other_preset');
+    const fillPresets = () => {
+        const names = savedPresetNames();
+        const cur = settings().otherPreset || '';
+        presetSel.replaceChildren(new Option(names.length ? '（选一个预设）' : '（没读到已保存的预设）', ''));
+        for (const n of names) presetSel.append(new Option(n, n));
+        if (cur && !names.includes(cur)) presetSel.append(new Option(`${cur}（找不到了）`, cur));
+        presetSel.value = cur;
+    };
+    fillPresets();
+    presetSel.addEventListener('focus', fillPresets);
+    wrap.querySelector('#ob_preset').addEventListener('focus', showApi); // 期间可能换了 API
     const prompt = wrap.querySelector('#ob_prompt');
     prompt.placeholder = MERGE_SYSTEM;
 
@@ -936,7 +1134,7 @@ function mountSettings() {
         const commit = () => {
             settings()[k] = input.type === 'checkbox' ? input.checked : input.value.trim();
             ctx().saveSettingsDebounced();
-            if (k === 'apiMode') showApi();
+            if (k === 'apiMode' || k === 'presetMode') showApi();
             if (k === 'layout') {
                 closeOverlayShell();
                 // 换布局时先瞬间切到新的收起位置，免得下次打开从旧方向斜着滑进来。
