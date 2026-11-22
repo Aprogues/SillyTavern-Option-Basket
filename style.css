@@ -1,3 +1,9 @@
+/*!
+ * 选项篮（SillyTavern Option Basket）
+ * Copyright (c) 2026 Aprogues
+ * 以 MIT 协议发布，完整源代码：https://github.com/Aprogues/SillyTavern-Option-Basket
+ * 不收集任何信息；除你自己选择的模型接口外，不向任何第三方地址发送请求（所有请求都经酒馆后台）。
+ */
 /* 选项篮 —— 默认跟随酒馆主题配色（文件末尾）；下面是「固定深色」的取值 */
 .ob-root {
     --ob-bg: #26272C;

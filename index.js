@@ -1,3 +1,9 @@
+/*!
+ * 选项篮（SillyTavern Option Basket）
+ * Copyright (c) 2026 Aprogues
+ * 以 MIT 协议发布，完整源代码：https://github.com/Aprogues/SillyTavern-Option-Basket
+ * 不收集任何信息；除你自己选择的模型接口外，不向任何第三方地址发送请求（所有请求都经酒馆后台）。
+ */
 // 选项篮：收集各次重 roll 回复里的选项，排序后拼接或让 AI 串成一段，填进输入框。
 // 数据：篮子存在当前聊天的 chat_metadata（随聊天文件同步到各设备）；
 //       设置存在 extension_settings.option_basket；折叠状态只存本机。
