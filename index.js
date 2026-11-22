@@ -573,7 +573,7 @@ function buildBody(list, reply) {
     const actions = el('div', 'ob-actions');
     const merge = el('button', 'ob-btn ob-primary');
     merge.type = 'button';
-    merge.append(icon(busy ? 'fa-stop' : 'fa-wand-magic-sparkles'), el('span', '', busy ? '串联中…点此取消' : '串成一段'));
+    merge.append(icon(busy ? 'fa-stop' : 'fa-wand-magic-sparkles'), el('span', '', busy ? '串联中…点此取消' : '串一串'));
     merge.addEventListener('click', onMerge);
     const join = el('button', 'ob-btn');
     join.type = 'button';
@@ -858,7 +858,7 @@ function mountSettings() {
     </select>
     <label class="checkbox_label" for="ob_clear"><input id="ob_clear" type="checkbox" data-k="clearUsedOnSend"><span>发送后自动清空这次拼接或串联用到的条目（之后新加的保留）</span></label>
 
-    <h4>「串成一段」用哪个模型</h4>
+    <h4>「串一串」用哪个模型</h4>
     <select id="ob_api" class="text_pole" data-k="apiMode">
       <option value="follow">跟随当前连接</option>
       <option value="profile">酒馆的连接配置</option>
